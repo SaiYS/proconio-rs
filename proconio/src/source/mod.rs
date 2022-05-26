@@ -63,7 +63,7 @@ pub mod once;
 pub mod auto {
     //! Defines `AutoSource`.
     //!
-    //! It is `LineSource` for debug build, `OnceSource` for release build.
+    //! `AutoSource` is a wrapper of either LineSource or OnceSource.
 
     use super::{line::LineSource, once::OnceSource, Source};
     use std::io::{BufRead, BufReader};
@@ -71,16 +71,6 @@ pub mod auto {
     pub enum AutoSource<R: BufRead> {
         Line(LineSource<R>),
         Once(OnceSource<R>),
-    }
-
-    impl<R: BufRead> AutoSource<R> {
-        pub fn new(reader: R, interactive: bool) -> Self {
-            if interactive {
-                Self::Line(LineSource::new(reader))
-            } else {
-                Self::Once(OnceSource::new(reader))
-            }
-        }
     }
 
     impl<R: BufRead> Source<R> for AutoSource<R> {
@@ -101,7 +91,19 @@ pub mod auto {
 
     impl<'a> From<&'a str> for AutoSource<BufReader<&'a [u8]>> {
         fn from(s: &'a str) -> AutoSource<BufReader<&'a [u8]>> {
-            AutoSource::new(BufReader::new(s.as_bytes()), false)
+            AutoSource::Once(OnceSource::new(BufReader::new(s.as_bytes())))
+        }
+    }
+
+    impl<R: BufRead> From<LineSource<R>> for AutoSource<R> {
+        fn from(s: LineSource<R>) -> Self {
+            Self::Line(s)
+        }
+    }
+
+    impl<R: BufRead> From<OnceSource<R>> for AutoSource<R> {
+        fn from(s: OnceSource<R>) -> Self {
+            Self::Once(s)
         }
     }
 }

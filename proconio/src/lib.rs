@@ -512,7 +512,7 @@ pub use proconio_derive::*;
 pub mod marker;
 pub mod source;
 
-use crate::source::{auto::AutoSource, line::LineSource};
+use crate::source::{auto::AutoSource, line::LineSource, once::OnceSource};
 use lazy_static::lazy_static;
 use std::io;
 use std::io::{BufReader, Stdin};
@@ -522,15 +522,21 @@ use std::sync::Mutex;
 #[doc(hidden)]
 pub use crate::source::Readable as __Readable;
 
+/// **DO NOT** recommend to use this static variable directly
 pub static mut __INTERACTIVE: bool = false;
 
 lazy_static! {
     #[doc(hidden)]
-    pub static ref STDIN_SOURCE: Mutex<AutoSource<BufReader<Stdin>>> =
-    if cfg!(debug_assertion) {
-        Mutex::new(AutoSource::Line(LineSource::new(BufReader::new(io::stdin()))))
-    } else {
-        Mutex::new(AutoSource::new(BufReader::new(io::stdin()), unsafe {__INTERACTIVE}))
+    /// `STDIN_SOURCE` is initialized with LineSource,
+    /// when `__INTERACTIVE` or `debug_assersion` is enabled,
+    /// otherwise with OnceSource.
+    pub static ref STDIN_SOURCE: Mutex<AutoSource<BufReader<Stdin>>> = {
+        let source = if unsafe {__INTERACTIVE} || cfg!(debug_assertion) {
+            AutoSource::from(LineSource::new(BufReader::new(io::stdin())))
+        } else {
+            AutoSource::from(OnceSource::new(BufReader::new(io::stdin())))
+        };
+        Mutex::new(source)
     };
 }
 
@@ -600,6 +606,7 @@ macro_rules! input {
         }
     };
     ($($rest:tt)*) => {
+        unsafe { $crate::__INTERACTIVE = false; }
         let mut locked_stdin = $crate::STDIN_SOURCE.lock().expect(concat!(
             "failed to lock the stdin; please re-run this program.  ",
             "If this issue repeatedly occur, this is a bug in `proconio`.  ",
@@ -616,7 +623,9 @@ macro_rules! input {
 
 /// read input from stdin interactively.
 ///
-/// this macro is alias of:
+/// note: using both `input!` and `input_interactice!` spotaneously is **NOT** recommended.
+///
+/// this macro is a alias of:
 /// ```text
 /// let source = procontio::source::line::LineSource::new(BufReader::new(std::io::stdin()))
 /// input! {
@@ -625,7 +634,7 @@ macro_rules! input {
 ///     ...
 /// }
 /// ```
-/// read the documet of [input!](input) for further information.
+/// read [input!](input) for further information.
 #[macro_export]
 macro_rules! input_interactive {
     ($($rest:tt)*) => {
