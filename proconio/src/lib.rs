@@ -522,16 +522,16 @@ use std::sync::Mutex;
 #[doc(hidden)]
 pub use crate::source::Readable as __Readable;
 
-lazy_static! {
-    #[doc(hidden)]
-    pub static ref STDIN_SOURCE: Mutex<AutoSource<BufReader<Stdin>>> =
-        Mutex::new(AutoSource::new(BufReader::new(io::stdin())));
-}
+pub static mut __INTERACTIVE: bool = false;
 
 lazy_static! {
     #[doc(hidden)]
-    pub static ref INTERACTIVE_STDIN_SOURCE: Mutex<LineSource<BufReader<Stdin>>> =
-        Mutex::new(LineSource::new(BufReader::new(io::stdin())));
+    pub static ref STDIN_SOURCE: Mutex<AutoSource<BufReader<Stdin>>> =
+    if cfg!(debug_assertion) {
+        Mutex::new(AutoSource::Line(LineSource::new(BufReader::new(io::stdin()))))
+    } else {
+        Mutex::new(AutoSource::new(BufReader::new(io::stdin()), unsafe {__INTERACTIVE}))
+    };
 }
 
 /// read input from stdin.
@@ -629,17 +629,10 @@ macro_rules! input {
 #[macro_export]
 macro_rules! input_interactive {
     ($($rest:tt)*) => {
-        let mut locked_stdin = $crate::INTERACTIVE_STDIN_SOURCE.lock().expect(concat!(
-            "failed to lock the stdin; please re-run this program.  ",
-            "If this issue repeatedly occur, this is a bug in `proconio`.  ",
-            "Please report this issue from ",
-            "<https://github.com/statiolake/proconio-rs/issues>."
-        ));
+        unsafe { $crate::__INTERACTIVE = true; }
         $crate::input! {
-            from &mut *locked_stdin,
             $($rest)*
         }
-        drop(locked_stdin); // release the lock
     };
 }
 
@@ -714,17 +707,6 @@ macro_rules! read_value {
 pub fn is_stdin_empty() -> bool {
     use crate::source::Source;
     let mut lock = STDIN_SOURCE.lock().expect(concat!(
-        "failed to lock the stdin; please re-run this program.  ",
-        "If this issue repeatedly occur, this is a bug in `proconio`.  ",
-        "Please report this issue from ",
-        "<https://github.com/statiolake/proconio-rs/issues>."
-    ));
-    lock.is_empty()
-}
-
-pub fn is_stdin_empty_interactive() -> bool {
-    use crate::source::Source;
-    let mut lock = INTERACTIVE_STDIN_SOURCE.lock().expect(concat!(
         "failed to lock the stdin; please re-run this program.  ",
         "If this issue repeatedly occur, this is a bug in `proconio`.  ",
         "Please report this issue from ",

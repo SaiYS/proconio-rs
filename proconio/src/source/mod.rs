@@ -65,10 +65,45 @@ pub mod auto {
     //!
     //! It is `LineSource` for debug build, `OnceSource` for release build.
 
-    #[cfg(debug_assertions)]
-    pub use super::line::LineSource as AutoSource;
-    #[cfg(not(debug_assertions))]
-    pub use super::once::OnceSource as AutoSource;
+    use super::{line::LineSource, once::OnceSource, Source};
+    use std::io::{BufRead, BufReader};
+
+    pub enum AutoSource<R: BufRead> {
+        Line(LineSource<R>),
+        Once(OnceSource<R>),
+    }
+
+    impl<R: BufRead> AutoSource<R> {
+        pub fn new(reader: R, interactive: bool) -> Self {
+            if interactive {
+                Self::Line(LineSource::new(reader))
+            } else {
+                Self::Once(OnceSource::new(reader))
+            }
+        }
+    }
+
+    impl<R: BufRead> Source<R> for AutoSource<R> {
+        fn next_token(&mut self) -> Option<&str> {
+            match self {
+                AutoSource::Line(s) => s.next_token(),
+                AutoSource::Once(s) => s.next_token(),
+            }
+        }
+
+        fn is_empty(&mut self) -> bool {
+            match self {
+                AutoSource::Line(s) => s.is_empty(),
+                AutoSource::Once(s) => s.is_empty(),
+            }
+        }
+    }
+
+    impl<'a> From<&'a str> for AutoSource<BufReader<&'a [u8]>> {
+        fn from(s: &'a str) -> AutoSource<BufReader<&'a [u8]>> {
+            AutoSource::new(BufReader::new(s.as_bytes()), false)
+        }
+    }
 }
 
 /// The main trait. Types implementing this trait can be used for source of `input!` macro.
